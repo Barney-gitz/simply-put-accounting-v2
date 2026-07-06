@@ -4,9 +4,9 @@ import postgres from "postgres";
 const connectionString = process.env.DATABASE_URL;
 
 if (!connectionString) {
-  throw new Error("DATABASE_URL is not set");
+  throw new Error("DATABASE_URL is not configured.");
 }
 
-const client = postgres(connectionString);
+export const client = postgres(connectionString);
 
 export const db = drizzle(client);

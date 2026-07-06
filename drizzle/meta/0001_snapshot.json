@@ -1,6 +1,6 @@
 {
-  "id": "e5970a42-169a-4141-bbbe-6a1c50f1fcde",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "da428b58-3f08-47cc-8db2-d59623d9a997",
+  "prevId": "e5970a42-169a-4141-bbbe-6a1c50f1fcde",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -314,6 +314,12 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
+        "code": {
+          "name": "code",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
         "name": {
           "name": "name",
           "type": "varchar(100)",
@@ -345,6 +351,13 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
+        "service_types_code_unique": {
+          "name": "service_types_code_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "code"
+          ]
+        },
         "service_types_name_unique": {
           "name": "service_types_name_unique",
           "nullsNotDistinct": false,

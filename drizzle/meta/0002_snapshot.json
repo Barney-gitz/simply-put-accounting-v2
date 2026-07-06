@@ -1,6 +1,6 @@
 {
-  "id": "e5970a42-169a-4141-bbbe-6a1c50f1fcde",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "76ae83d1-f8e9-4849-8251-474ba5e73b8b",
+  "prevId": "da428b58-3f08-47cc-8db2-d59623d9a997",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -104,7 +104,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "client_services_client_id_service_type_id_unique": {
+          "name": "client_services_client_id_service_type_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "client_id",
+            "service_type_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -314,6 +323,12 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
+        "code": {
+          "name": "code",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
         "name": {
           "name": "name",
           "type": "varchar(100)",
@@ -345,6 +360,13 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
+        "service_types_code_unique": {
+          "name": "service_types_code_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "code"
+          ]
+        },
         "service_types_name_unique": {
           "name": "service_types_name_unique",
           "nullsNotDistinct": false,
