@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: simply_put_accounting_db
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: simply_put
+      POSTGRES_PASSWORD: simply_put_dev_password
+      POSTGRES_DB: simply_put_accounting
+    volumes:
+      - simply_put_accounting_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  simply_put_accounting_postgres_data:
