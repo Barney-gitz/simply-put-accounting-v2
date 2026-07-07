@@ -29,6 +29,20 @@
       "when": 1783352146684,
       "tag": "0003_mysterious_odin",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1783352907890,
+      "tag": "0004_pink_junta",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1783383599242,
+      "tag": "0005_wealthy_retro_girl",
+      "breakpoints": true
     }
   ]
 }

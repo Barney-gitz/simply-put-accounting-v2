@@ -15,6 +15,18 @@ export const serviceTypes = pgTable("service_types", {
 
   description: varchar("description", { length: 255 }),
 
+  availableForIndividuals: boolean("available_for_individuals")
+    .default(false)
+    .notNull(),
+
+  availableForCompanies: boolean("available_for_companies")
+    .default(false)
+    .notNull(),
+
+  availableForPartnerships: boolean("available_for_partnerships")
+    .default(false)
+    .notNull(),
+
   isActive: boolean("is_active").default(true).notNull(),
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
