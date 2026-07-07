@@ -43,6 +43,13 @@
       "when": 1783383599242,
       "tag": "0005_wealthy_retro_girl",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1783415026778,
+      "tag": "0006_marvelous_thundra",
+      "breakpoints": true
     }
   ]
 }
