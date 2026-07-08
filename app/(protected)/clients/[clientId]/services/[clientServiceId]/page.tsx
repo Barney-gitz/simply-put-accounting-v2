@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { clients } from "@/db/schema/clients";
@@ -18,6 +18,9 @@ type ServicePageProps = {
     clientId: string;
     clientServiceId: string;
   }>;
+  searchParams: Promise<{
+    taxYear?: string;
+  }>;
 };
 
 const progressLabels: Record<string, string> = {
@@ -31,8 +34,23 @@ const progressLabels: Record<string, string> = {
   not_applicable_this_year: "N/A This Year",
 };
 
-export default async function ClientServicePage({ params }: ServicePageProps) {
+const progressBadgeClasses: Record<string, string> = {
+  not_started: "bg-gray-100 text-gray-700",
+  records_requested: "bg-amber-100 text-amber-800",
+  records_received: "bg-sky-100 text-sky-800",
+  in_progress: "bg-indigo-100 text-indigo-800",
+  with_client: "bg-orange-100 text-orange-800",
+  ready_for_review: "bg-purple-100 text-purple-800",
+  filed: "bg-emerald-100 text-emerald-800",
+  not_applicable_this_year: "bg-slate-100 text-slate-700",
+};
+
+export default async function ClientServicePage({
+  params,
+  searchParams,
+}: ServicePageProps) {
   const { clientId, clientServiceId } = await params;
+  const { taxYear } = await searchParams;
 
   const client = await db.query.clients.findFirst({
     where: eq(clients.id, clientId),
@@ -68,7 +86,8 @@ export default async function ClientServicePage({ params }: ServicePageProps) {
         clientName={client.displayName}
         clientServiceId={clientService.id}
         serviceName={clientService.serviceName}
-      />
+        selectedTaxYear={taxYear}
+    />
     );
   }
 
@@ -87,11 +106,13 @@ async function SelfAssessmentWorkspace({
   clientName,
   clientServiceId,
   serviceName,
+  selectedTaxYear,
 }: {
   clientId: string;
   clientName: string;
   clientServiceId: string;
   serviceName: string;
+  selectedTaxYear?: string;
 }) {
   const staff = await db
     .select({
@@ -116,32 +137,41 @@ async function SelfAssessmentWorkspace({
     profile = createdProfiles[0];
   }
 
-  const currentTaxYear = getCurrentSelfAssessmentTaxYear();
+    const currentTaxYear = getCurrentSelfAssessmentTaxYear();
 
-  let currentYear = await db.query.selfAssessmentTaxYears.findFirst({
-    where: and(
-      eq(selfAssessmentTaxYears.selfAssessmentProfileId, profile.id),
-      eq(selfAssessmentTaxYears.taxYear, currentTaxYear)
+    const activeTaxYear = selectedTaxYear ?? currentTaxYear;
+
+    const isViewingCurrentTaxYear = activeTaxYear === currentTaxYear;
+    const isReadOnly = !isViewingCurrentTaxYear;
+
+    let currentYear = await db.query.selfAssessmentTaxYears.findFirst({
+        where: and(
+        eq(selfAssessmentTaxYears.selfAssessmentProfileId, profile.id),
+        eq(selfAssessmentTaxYears.taxYear, activeTaxYear)
     ),
-  });
+    });
 
-  if (!currentYear) {
-    const createdTaxYears = await db
-      .insert(selfAssessmentTaxYears)
-      .values({
+    if (!currentYear && activeTaxYear === currentTaxYear) {
+        const createdTaxYears = await db
+        .insert(selfAssessmentTaxYears)
+        .values({
         selfAssessmentProfileId: profile.id,
         taxYear: currentTaxYear,
-      })
-      .returning();
+        })
+        .returning();
 
-    currentYear = createdTaxYears[0];
-  }
+        currentYear = createdTaxYears[0];
+    }
+
+    if (!currentYear) {
+    notFound();
+    }
 
   const taxYears = await db
     .select()
     .from(selfAssessmentTaxYears)
     .where(eq(selfAssessmentTaxYears.selfAssessmentProfileId, profile.id))
-    .orderBy(asc(selfAssessmentTaxYears.taxYear));
+    .orderBy(desc(selfAssessmentTaxYears.taxYear));
 
   return (
     <div>
@@ -154,22 +184,28 @@ async function SelfAssessmentWorkspace({
         </Link>
 
         <SelfAssessmentWorkspaceForm
-          clientName={clientName}
-          serviceName={serviceName}
-          currentTaxYear={currentYear.taxYear}
-          profileId={profile.id}
-          taxYearId={currentYear.id}
+            clientName={clientName}
+            serviceName={serviceName}
+            currentTaxYear={currentYear.taxYear}
+            profileId={profile.id}
+            taxYearId={currentYear.id}
+            isReadOnly={isReadOnly}
+            currentYearHref={`/clients/${clientId}/services/${clientServiceId}`}
         >
-          <div className="grid gap-6 lg:grid-cols-3">
+            <div className="grid gap-6 lg:grid-cols-3">
             <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm lg:col-span-2">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">
-                    Current Tax Year
-                  </h2>
+                    {isReadOnly
+                        ? `Historical Tax Year · ${currentYear.taxYear}`
+                        : "Current Tax Year"}
+                    </h2>
                   <p className="mt-1 text-sm text-gray-500">
-                    This is the workflow staff will mainly use from the dashboard.
-                  </p>
+                    {isReadOnly
+                        ? "Archived record for reference only."
+                        : "This is the workflow staff will mainly use from the dashboard."}
+                    </p>
                 </div>
 
                 <StatusBadge status={currentYear.progressStatus} />
@@ -178,6 +214,7 @@ async function SelfAssessmentWorkspace({
               <div className="mt-6 grid gap-4 sm:grid-cols-4">
                 <SelectField
                   label="Progress"
+                  disabled={isReadOnly}
                   name="progressStatus"
                   defaultValue={currentYear.progressStatus}
                   options={[
@@ -193,10 +230,11 @@ async function SelfAssessmentWorkspace({
                 />
 
                 <TextField
-                  label="Filed Date"
-                  name="filedAt"
-                  type="date"
-                  defaultValue={formatDateInputValue(currentYear.filedAt)}
+                    label="Filed Date"
+                    name="filedAt"
+                    type="date"
+                    defaultValue={formatDateInputValue(currentYear.filedAt)}
+                    disabled={isReadOnly}
                 />
 
                 <StaffSelect
@@ -204,6 +242,7 @@ async function SelfAssessmentWorkspace({
                   name="assignedToStaffId"
                   staff={staff}
                   defaultValue={currentYear.assignedToStaffId}
+                  disabled={isReadOnly}
                 />
 
                 <StaffSelect
@@ -211,6 +250,7 @@ async function SelfAssessmentWorkspace({
                   name="approvedByStaffId"
                   staff={staff}
                   defaultValue={currentYear.approvedByStaffId}
+                  disabled={isReadOnly}
                 />
               </div>
 
@@ -219,10 +259,12 @@ async function SelfAssessmentWorkspace({
                   Notes
                 </label>
                 <textarea
-                  name="notes"
-                  defaultValue={currentYear.notes ?? ""}
-                  rows={5}
-                  className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#6BC1B7] focus:ring-2 focus:ring-[#6BC1B7]/20"
+                    key={currentYear.id}
+                    name="notes"
+                    defaultValue={currentYear.notes ?? ""}
+                    rows={5}
+                    disabled={isReadOnly}
+                    className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#6BC1B7] focus:ring-2 focus:ring-[#6BC1B7]/20 disabled:bg-gray-50 disabled:text-gray-500"
                 />
               </div>
             </section>
@@ -261,23 +303,31 @@ async function SelfAssessmentWorkspace({
               </p>
 
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                <TextField label="UTR" name="utr" defaultValue={profile.utr} />
+                <TextField
+                    label="UTR"
+                    name="utr"
+                    defaultValue={profile.utr}
+                    disabled={isReadOnly}
+                />
                 <TextField
                   label="NI Number"
                   name="niNumber"
                   defaultValue={profile.niNumber}
+                  disabled={isReadOnly}
                 />
                 <TextField
                   label="DOB"
                   name="dateOfBirth"
                   type="date"
                   defaultValue={profile.dateOfBirth}
+                  disabled={isReadOnly}
                 />
 
                 <SelectField
                   label="Bookkeeping"
                   name="bookkeepingSoftware"
                   defaultValue={profile.bookkeepingSoftware ?? ""}
+                  disabled={isReadOnly}
                   options={[
                     ["", "Select"],
                     ["freeagent", "FreeAgent"],
@@ -291,6 +341,7 @@ async function SelfAssessmentWorkspace({
                   label="MTD?"
                   name="isMtd"
                   defaultValue={profile.isMtd ? "true" : "false"}
+                  disabled={isReadOnly}
                   options={[
                     ["false", "No"],
                     ["true", "Yes"],
@@ -304,10 +355,17 @@ async function SelfAssessmentWorkspace({
 
               <div className="mt-5 space-y-3">
                 {taxYears.map((taxYear) => (
-                  <div
-                    key={taxYear.id}
-                    className="rounded-xl border border-gray-100 px-4 py-3"
-                  >
+                    <Link
+                        key={taxYear.id}
+                        href={`/clients/${clientId}/services/${clientServiceId}?taxYear=${encodeURIComponent(
+                        taxYear.taxYear
+                        )}`}
+                        className={`block rounded-xl border px-4 py-3 transition ${
+                            taxYear.taxYear === activeTaxYear
+                                ? "border-orange-300 bg-orange-50"
+                                : "border-gray-100 hover:bg-gray-50"
+                            }`}
+                    >
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-sm font-medium text-gray-900">
                         {taxYear.taxYear}
@@ -320,7 +378,7 @@ async function SelfAssessmentWorkspace({
                         Filed {formatDisplayDate(taxYear.filedAt)}
                       </p>
                     )}
-                  </div>
+                  </Link>
                 ))}
               </div>
             </section>
@@ -396,11 +454,13 @@ function TextField({
   name,
   defaultValue,
   type = "text",
+  disabled = false,
 }: {
   label: string;
   name: string;
   defaultValue: string | null;
   type?: string;
+  disabled?: boolean;
 }) {
   return (
     <div>
@@ -409,7 +469,8 @@ function TextField({
         type={type}
         name={name}
         defaultValue={defaultValue ?? ""}
-        className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#6BC1B7] focus:ring-2 focus:ring-[#6BC1B7]/20"
+        disabled={disabled}
+        className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#6BC1B7] focus:ring-2 focus:ring-[#6BC1B7]/20 disabled:bg-gray-50 disabled:text-gray-500"
       />
     </div>
   );
@@ -420,11 +481,13 @@ function SelectField({
   name,
   defaultValue,
   options,
+  disabled = false,
 }: {
   label: string;
   name: string;
   defaultValue: string;
   options: [string, string][];
+  disabled?: boolean;
 }) {
   return (
     <div>
@@ -432,7 +495,8 @@ function SelectField({
       <select
         name={name}
         defaultValue={defaultValue}
-        className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#6BC1B7] focus:ring-2 focus:ring-[#6BC1B7]/20"
+        disabled={disabled}
+        className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#6BC1B7] focus:ring-2 focus:ring-[#6BC1B7]/20 disabled:bg-gray-50 disabled:text-gray-500"
       >
         {options.map(([value, label]) => (
           <option key={value || "empty"} value={value}>
@@ -449,6 +513,7 @@ function StaffSelect({
   name,
   staff,
   defaultValue,
+  disabled = false,
 }: {
   label: string;
   name: string;
@@ -458,12 +523,14 @@ function StaffSelect({
     lastName: string;
   }[];
   defaultValue: string | null;
+  disabled?: boolean;
 }) {
   return (
     <SelectField
       label={label}
       name={name}
       defaultValue={defaultValue ?? ""}
+      disabled={disabled}
       options={[
         ["", "Select"],
         ...staff.map(
@@ -491,7 +558,11 @@ function Detail({ label, value }: { label: string; value: string | null }) {
 
 function StatusBadge({ status }: { status: string }) {
   return (
-    <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
+    <span
+      className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+        progressBadgeClasses[status] ?? "bg-gray-100 text-gray-700"
+      }`}
+    >
       {progressLabels[status] ?? status}
     </span>
   );

@@ -13,6 +13,8 @@ export function SelfAssessmentWorkspaceForm({
   currentTaxYear,
   profileId,
   taxYearId,
+  isReadOnly = false,
+  currentYearHref,
   children,
 }: {
   clientName: string;
@@ -20,6 +22,8 @@ export function SelfAssessmentWorkspaceForm({
   currentTaxYear: string;
   profileId: string;
   taxYearId: string;
+  isReadOnly?: boolean;
+  currentYearHref?: string;
   children: ReactNode;
 }) {
   const router = useRouter();
@@ -27,7 +31,7 @@ export function SelfAssessmentWorkspaceForm({
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const savedTimerRef = useRef<number | null>(null);
 
-  const hasUnsavedChanges = saveState === "dirty";
+  const hasUnsavedChanges = !isReadOnly && saveState === "dirty";
 
   useEffect(() => {
     return () => {
@@ -40,7 +44,7 @@ export function SelfAssessmentWorkspaceForm({
   return (
     <form
       onChange={() => {
-        if (saveState !== "saving") {
+        if (!isReadOnly && saveState !== "saving") {
           setSaveState("dirty");
         }
       }}
@@ -85,17 +89,37 @@ export function SelfAssessmentWorkspaceForm({
           </div>
 
           <p className="mt-2 text-sm text-gray-600">
-            {clientName} · Current year {currentTaxYear}
+            {clientName} ·{" "}
+            {isReadOnly
+                ? `Historical tax year ${currentTaxYear}`
+                : `Current year ${currentTaxYear}`}
           </p>
         </div>
 
-        <button
-          type="submit"
-          disabled={saveState !== "dirty"}
-          className={getButtonClassName(saveState, hasUnsavedChanges)}
-        >
-          {getButtonLabel(saveState)}
-        </button>
+        {isReadOnly ? (
+            <div className="text-right">
+                <span className="inline-flex rounded-xl border border-orange-200 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-800">
+                Historical · Read Only
+                </span>
+
+                {currentYearHref && (
+                <a
+                    href={currentYearHref}
+                    className="mt-2 block text-sm font-medium text-orange-800 underline underline-offset-4 hover:text-orange-700"
+                >
+                    ← Return to current tax year
+                </a>
+                )}
+            </div>
+            ) : (
+            <button
+                type="submit"
+                disabled={saveState !== "dirty"}
+                className={getButtonClassName(saveState, hasUnsavedChanges)}
+            >
+                {getButtonLabel(saveState)}
+            </button>
+            )}
       </div>
 
       <div className="mt-8">{children}</div>
