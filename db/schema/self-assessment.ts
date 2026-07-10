@@ -1,6 +1,5 @@
 import {
   boolean,
-  date,
   pgEnum,
   pgTable,
   text,
@@ -40,12 +39,6 @@ export const selfAssessmentProfiles = pgTable(
     clientServiceId: uuid("client_service_id")
       .references(() => clientServices.id, { onDelete: "cascade" })
       .notNull(),
-
-    utr: varchar("utr", { length: 20 }),
-
-    niNumber: varchar("ni_number", { length: 20 }),
-
-    dateOfBirth: date("date_of_birth"),
 
     bookkeepingSoftware: selfAssessmentBookkeepingSoftwareEnum(
       "bookkeeping_software"

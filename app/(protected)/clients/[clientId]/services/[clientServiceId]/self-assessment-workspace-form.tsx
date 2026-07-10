@@ -8,6 +8,7 @@ import { updateSelfAssessmentWorkspaceAction } from "./self-assessment-actions";
 type SaveState = "idle" | "dirty" | "saving" | "saved";
 
 export function SelfAssessmentWorkspaceForm({
+  clientId,
   clientName,
   serviceName,
   currentTaxYear,
@@ -17,6 +18,7 @@ export function SelfAssessmentWorkspaceForm({
   currentYearHref,
   children,
 }: {
+  clientId: string;
   clientName: string;
   serviceName: string;
   currentTaxYear: string;
@@ -76,6 +78,7 @@ export function SelfAssessmentWorkspaceForm({
         });
       }}
     >
+      <input type="hidden" name="clientId" value={clientId} />
       <input type="hidden" name="profileId" value={profileId} />
       <input type="hidden" name="taxYearId" value={taxYearId} />
 

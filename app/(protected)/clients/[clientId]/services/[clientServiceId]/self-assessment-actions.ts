@@ -3,6 +3,8 @@
 import { eq } from "drizzle-orm";
 
 import { db } from "@/db/client";
+import { encryptNullable } from "@/lib/encryption";
+import { clientDetails } from "@/db/schema/client-details";
 import {
   selfAssessmentProfiles,
   selfAssessmentTaxYears,
@@ -52,18 +54,25 @@ function optionalDate(value: FormDataEntryValue | null) {
 export async function updateSelfAssessmentWorkspaceAction(formData: FormData) {
   const profileId = String(formData.get("profileId"));
   const taxYearId = String(formData.get("taxYearId"));
+  const clientId = String(formData.get("clientId"));
 
-  if (!profileId || !taxYearId) {
+  if (!clientId || !profileId || !taxYearId) {
     return { success: false };
   }
 
   await db.transaction(async (tx) => {
     await tx
+      .update(clientDetails)
+      .set({
+        utr: encryptNullable(optionalValue(formData.get("utr"))),
+        niNumber: encryptNullable(optionalValue(formData.get("niNumber"))),
+        dateOfBirth: optionalValue(formData.get("dateOfBirth")),
+        updatedAt: new Date(),
+      })
+      .where(eq(clientDetails.clientId, clientId));
+      await tx
       .update(selfAssessmentProfiles)
       .set({
-        utr: optionalValue(formData.get("utr")),
-        niNumber: optionalValue(formData.get("niNumber")),
-        dateOfBirth: optionalValue(formData.get("dateOfBirth")),
         bookkeepingSoftware: enumValue(
           formData.get("bookkeepingSoftware"),
           bookkeepingValues

@@ -1,0 +1,1 @@
+ALTER TABLE "self_assessment_profiles" ALTER COLUMN "ni_number" SET DATA TYPE text;

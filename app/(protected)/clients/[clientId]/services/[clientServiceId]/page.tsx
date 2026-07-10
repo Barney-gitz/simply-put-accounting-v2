@@ -4,6 +4,7 @@ import { and, asc, desc, eq } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { clients } from "@/db/schema/clients";
+import { clientDetails } from "@/db/schema/client-details";
 import { clientServices } from "@/db/schema/client-services";
 import { serviceTypes } from "@/db/schema/service-types";
 import { staffUsers } from "@/db/schema/staff-users";
@@ -12,6 +13,7 @@ import {
   selfAssessmentTaxYears,
 } from "@/db/schema/self-assessment";
 import { SelfAssessmentWorkspaceForm } from "./self-assessment-workspace-form";
+import { decryptNullable } from "@/lib/encryption";
 
 type ServicePageProps = {
   params: Promise<{
@@ -137,6 +139,21 @@ async function SelfAssessmentWorkspace({
     profile = createdProfiles[0];
   }
 
+  let details = await db.query.clientDetails.findFirst({
+    where: eq(clientDetails.clientId, clientId),
+  });
+
+  if (!details) {
+    const created = await db
+      .insert(clientDetails)
+      .values({
+        clientId,
+      })
+      .returning();
+
+    details = created[0];
+  }
+
     const currentTaxYear = getCurrentSelfAssessmentTaxYear();
 
     const activeTaxYear = selectedTaxYear ?? currentTaxYear;
@@ -184,6 +201,7 @@ async function SelfAssessmentWorkspace({
         </Link>
 
         <SelfAssessmentWorkspaceForm
+            clientId={clientId}
             clientName={clientName}
             serviceName={serviceName}
             currentTaxYear={currentYear.taxYear}
@@ -306,20 +324,20 @@ async function SelfAssessmentWorkspace({
                 <TextField
                     label="UTR"
                     name="utr"
-                    defaultValue={profile.utr}
+                    defaultValue={decryptNullable(details.utr)}
                     disabled={isReadOnly}
                 />
                 <TextField
                   label="NI Number"
                   name="niNumber"
-                  defaultValue={profile.niNumber}
+                  defaultValue={decryptNullable(details.niNumber)}
                   disabled={isReadOnly}
                 />
                 <TextField
                   label="DOB"
                   name="dateOfBirth"
                   type="date"
-                  defaultValue={profile.dateOfBirth}
+                  defaultValue={details.dateOfBirth}
                   disabled={isReadOnly}
                 />
 

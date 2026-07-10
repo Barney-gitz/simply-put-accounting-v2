@@ -30,7 +30,6 @@ export const clients = pgTable("clients", {
 
   registeredName: varchar("registered_name", { length: 255 }),
 
-  utr: varchar("utr", { length: 20 }),
 
   companyNumber: varchar("company_number", { length: 20 }),
 
