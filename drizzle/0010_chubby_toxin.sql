@@ -1,0 +1,2 @@
+ALTER TYPE "public"."self_assessment_bookkeeping_software" RENAME TO "bookkeeping_software";--> statement-breakpoint
+ALTER TABLE "client_details" ADD COLUMN "bookkeeping_software" "bookkeeping_software";

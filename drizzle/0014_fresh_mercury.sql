@@ -1,0 +1,1 @@
+ALTER TABLE "accounts_tracking_periods" ALTER COLUMN "snapshot" SET DATA TYPE jsonb;

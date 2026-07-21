@@ -67,16 +67,16 @@ export async function updateSelfAssessmentWorkspaceAction(formData: FormData) {
         utr: encryptNullable(optionalValue(formData.get("utr"))),
         niNumber: encryptNullable(optionalValue(formData.get("niNumber"))),
         dateOfBirth: optionalValue(formData.get("dateOfBirth")),
+        bookkeepingSoftware: enumValue(
+          formData.get("bookkeepingSoftware"),
+          bookkeepingValues
+        ),
         updatedAt: new Date(),
       })
       .where(eq(clientDetails.clientId, clientId));
       await tx
       .update(selfAssessmentProfiles)
       .set({
-        bookkeepingSoftware: enumValue(
-          formData.get("bookkeepingSoftware"),
-          bookkeepingValues
-        ),
         isMtd: String(formData.get("isMtd")) === "true",
         updatedAt: new Date(),
       })

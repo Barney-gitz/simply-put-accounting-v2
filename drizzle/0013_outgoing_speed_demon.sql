@@ -1,0 +1,1 @@
+ALTER TABLE "accounts_tracking_periods" ALTER COLUMN "filed_at" SET DATA TYPE date;

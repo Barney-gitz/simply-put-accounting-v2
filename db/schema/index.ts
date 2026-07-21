@@ -6,3 +6,5 @@ export * from "./staff-sessions";
 export * from "./self-assessment";
 export * from "./client-details";
 export * from "./client-companies-house-codes";
+export * from "./bookkeeping-software";
+export * from "./accounts-tracking";

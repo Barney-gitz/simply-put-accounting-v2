@@ -11,9 +11,12 @@ import { staffUsers } from "@/db/schema/staff-users";
 import {
   selfAssessmentProfiles,
   selfAssessmentTaxYears,
+  type SelfAssessmentSnapshot,
 } from "@/db/schema/self-assessment";
 import { SelfAssessmentWorkspaceForm } from "./self-assessment-workspace-form";
+import { AccountsTrackingWorkspace } from "./accounts-tracking-workspace";
 import { decryptNullable } from "@/lib/encryption";
+import { calculateSelfAssessmentDates } from "@/lib/services/self-assessment/date-rules";
 
 type ServicePageProps = {
   params: Promise<{
@@ -21,7 +24,8 @@ type ServicePageProps = {
     clientServiceId: string;
   }>;
   searchParams: Promise<{
-    taxYear?: string;
+  taxYear?: string;
+  period?: string;
   }>;
 };
 
@@ -52,7 +56,7 @@ export default async function ClientServicePage({
   searchParams,
 }: ServicePageProps) {
   const { clientId, clientServiceId } = await params;
-  const { taxYear } = await searchParams;
+  const { taxYear, period } = await searchParams;
 
   const client = await db.query.clients.findFirst({
     where: eq(clients.id, clientId),
@@ -90,6 +94,18 @@ export default async function ClientServicePage({
         serviceName={clientService.serviceName}
         selectedTaxYear={taxYear}
     />
+    );
+  }
+
+  if (clientService.serviceCode === "accounts_tracking") {
+    return (
+      <AccountsTrackingWorkspace
+        clientId={client.id}
+        clientName={client.displayName}
+        clientServiceId={clientService.id}
+        serviceName={clientService.serviceName}
+        selectedPeriodId={period}
+      />
     );
   }
 
@@ -154,35 +170,108 @@ async function SelfAssessmentWorkspace({
     details = created[0];
   }
 
-    const currentTaxYear = getCurrentSelfAssessmentTaxYear();
-
-    const activeTaxYear = selectedTaxYear ?? currentTaxYear;
-
-    const isViewingCurrentTaxYear = activeTaxYear === currentTaxYear;
-    const isReadOnly = !isViewingCurrentTaxYear;
-
     let currentYear = await db.query.selfAssessmentTaxYears.findFirst({
-        where: and(
+      where: and(
         eq(selfAssessmentTaxYears.selfAssessmentProfileId, profile.id),
-        eq(selfAssessmentTaxYears.taxYear, activeTaxYear)
-    ),
+        eq(selfAssessmentTaxYears.isCurrent, true)
+      ),
     });
 
-    if (!currentYear && activeTaxYear === currentTaxYear) {
-        const createdTaxYears = await db
+    if (!currentYear) {
+      const createdTaxYears = await db
         .insert(selfAssessmentTaxYears)
         .values({
-        selfAssessmentProfileId: profile.id,
-        taxYear: currentTaxYear,
+          selfAssessmentProfileId: profile.id,
+          taxYear: getCurrentSelfAssessmentTaxYear(),
+          isCurrent: true,
         })
         .returning();
 
-        currentYear = createdTaxYears[0];
+      currentYear = createdTaxYears[0];
     }
 
-    if (!currentYear) {
-    notFound();
+    const activeTaxYear = selectedTaxYear ?? currentYear.taxYear;
+
+    const selectedYear =
+      activeTaxYear === currentYear.taxYear
+        ? currentYear
+        : await db.query.selfAssessmentTaxYears.findFirst({
+            where: and(
+              eq(selfAssessmentTaxYears.selfAssessmentProfileId, profile.id),
+              eq(selfAssessmentTaxYears.taxYear, activeTaxYear)
+            ),
+          });
+
+    if (!selectedYear) {
+      notFound();
     }
+
+    const isReadOnly = !selectedYear.isCurrent;
+
+    const selfAssessmentDates =
+      calculateSelfAssessmentDates(selectedYear.taxYear);
+
+    const historicalSnapshot = isReadOnly
+      ? (selectedYear.snapshot as SelfAssessmentSnapshot | null)
+      : null;
+
+    /*
+    * Current years read live permanent information.
+    * Historical years read only from the archived snapshot.
+    *
+    * We deliberately do not fall back to live client details for historical
+    * records because that would allow later client changes to rewrite history.
+    */
+    const workspaceClientName =
+      historicalSnapshot?.client.displayName ?? clientName;
+
+    const workspaceProgressStatus =
+      historicalSnapshot?.taxYear.progressStatus ??
+      selectedYear.progressStatus;
+
+    const workspaceAssignedToStaffId =
+      historicalSnapshot?.taxYear.assignedToStaffId ??
+      selectedYear.assignedToStaffId;
+
+    const workspaceApprovedByStaffId =
+      historicalSnapshot?.taxYear.approvedByStaffId ??
+      selectedYear.approvedByStaffId;
+
+    const workspaceFiledAt =
+      historicalSnapshot?.taxYear.filedAt ??
+      selectedYear.filedAt;
+
+    const workspaceNotes =
+      historicalSnapshot?.taxYear.notes ??
+      selectedYear.notes;
+
+    const workspaceUtr = isReadOnly
+      ? decryptNullable(
+          historicalSnapshot?.permanentInformation.encryptedUtr ??
+            null
+        )
+      : decryptNullable(details.utr);
+
+    const workspaceNiNumber = isReadOnly
+      ? decryptNullable(
+          historicalSnapshot?.permanentInformation
+            .encryptedNiNumber ?? null
+        )
+      : decryptNullable(details.niNumber);
+
+    const workspaceDateOfBirth = isReadOnly
+      ? historicalSnapshot?.permanentInformation.dateOfBirth ??
+        null
+      : details.dateOfBirth;
+
+    const workspaceBookkeepingSoftware = isReadOnly
+      ? historicalSnapshot?.permanentInformation
+          .bookkeepingSoftware ?? null
+      : details.bookkeepingSoftware;
+
+    const workspaceIsMtd = isReadOnly
+      ? historicalSnapshot?.permanentInformation.isMtd ?? false
+      : profile.isMtd;
 
   const taxYears = await db
     .select()
@@ -201,12 +290,14 @@ async function SelfAssessmentWorkspace({
         </Link>
 
         <SelfAssessmentWorkspaceForm
+            key={selectedYear.id}
             clientId={clientId}
-            clientName={clientName}
+            clientServiceId={clientServiceId}
+            clientName={workspaceClientName}
             serviceName={serviceName}
-            currentTaxYear={currentYear.taxYear}
+            currentTaxYear={selectedYear.taxYear}
             profileId={profile.id}
-            taxYearId={currentYear.id}
+            taxYearId={selectedYear.id}
             isReadOnly={isReadOnly}
             currentYearHref={`/clients/${clientId}/services/${clientServiceId}`}
         >
@@ -216,7 +307,7 @@ async function SelfAssessmentWorkspace({
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">
                     {isReadOnly
-                        ? `Historical Tax Year · ${currentYear.taxYear}`
+                        ? `Historical Tax Year · ${selectedYear.taxYear}`
                         : "Current Tax Year"}
                     </h2>
                   <p className="mt-1 text-sm text-gray-500">
@@ -226,7 +317,21 @@ async function SelfAssessmentWorkspace({
                     </p>
                 </div>
 
-                <StatusBadge status={currentYear.progressStatus} />
+                <StatusBadge status={workspaceProgressStatus} />
+              </div>
+
+              <div className="mt-6 grid gap-4 rounded-xl border border-gray-100 bg-gray-50 p-4 sm:grid-cols-2">
+                <Detail
+                  label="Year End"
+                  value={formatDisplayDate(selfAssessmentDates.yearEnd)}
+                />
+
+                <Detail
+                  label="File By"
+                  value={formatDisplayDate(
+                    selfAssessmentDates.filingDeadline
+                  )}
+                />
               </div>
 
               <div className="mt-6 grid gap-4 sm:grid-cols-4">
@@ -234,7 +339,7 @@ async function SelfAssessmentWorkspace({
                   label="Progress"
                   disabled={isReadOnly}
                   name="progressStatus"
-                  defaultValue={currentYear.progressStatus}
+                  defaultValue={workspaceProgressStatus}
                   options={[
                     ["not_started", "Not Started"],
                     ["records_requested", "Records Requested"],
@@ -251,7 +356,7 @@ async function SelfAssessmentWorkspace({
                     label="Filed Date"
                     name="filedAt"
                     type="date"
-                    defaultValue={formatDateInputValue(currentYear.filedAt)}
+                    defaultValue={formatDateInputValue(workspaceFiledAt)}
                     disabled={isReadOnly}
                 />
 
@@ -259,7 +364,7 @@ async function SelfAssessmentWorkspace({
                   label="Assigned To"
                   name="assignedToStaffId"
                   staff={staff}
-                  defaultValue={currentYear.assignedToStaffId}
+                  defaultValue={workspaceAssignedToStaffId}
                   disabled={isReadOnly}
                 />
 
@@ -267,7 +372,7 @@ async function SelfAssessmentWorkspace({
                   label="Approved By"
                   name="approvedByStaffId"
                   staff={staff}
-                  defaultValue={currentYear.approvedByStaffId}
+                  defaultValue={workspaceApprovedByStaffId}
                   disabled={isReadOnly}
                 />
               </div>
@@ -277,9 +382,9 @@ async function SelfAssessmentWorkspace({
                   Notes
                 </label>
                 <textarea
-                    key={currentYear.id}
+                    key={selectedYear.id}
                     name="notes"
-                    defaultValue={currentYear.notes ?? ""}
+                    defaultValue={workspaceNotes ?? ""}
                     rows={5}
                     disabled={isReadOnly}
                     className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#6BC1B7] focus:ring-2 focus:ring-[#6BC1B7]/20 disabled:bg-gray-50 disabled:text-gray-500"
@@ -295,19 +400,37 @@ async function SelfAssessmentWorkspace({
               <div className="mt-5 space-y-4">
                 <Detail
                   label="Progress"
-                  value={progressLabels[currentYear.progressStatus]}
+                  value={progressLabels[workspaceProgressStatus]}
+                />
+
+                <Detail
+                  label="Year End"
+                  value={formatDisplayDate(selfAssessmentDates.yearEnd)}
+                />
+
+                <Detail
+                  label="File By"
+                  value={formatDisplayDate(
+                    selfAssessmentDates.filingDeadline
+                  )}
                 />
                 <Detail
                   label="Assigned To"
-                  value={formatStaffName(staff, currentYear.assignedToStaffId)}
+                  value={formatStaffName(
+                    staff,
+                    workspaceAssignedToStaffId
+                  )}
                 />
                 <Detail
                   label="Approved By"
-                  value={formatStaffName(staff, currentYear.approvedByStaffId)}
+                  value={formatStaffName(
+                    staff,
+                    workspaceApprovedByStaffId
+                  )}
                 />
                 <Detail
                   label="Filed Date"
-                  value={formatDisplayDate(currentYear.filedAt)}
+                  value={formatDisplayDate(workspaceFiledAt)}
                 />
               </div>
             </section>
@@ -324,27 +447,27 @@ async function SelfAssessmentWorkspace({
                 <TextField
                     label="UTR"
                     name="utr"
-                    defaultValue={decryptNullable(details.utr)}
+                    defaultValue={workspaceUtr}
                     disabled={isReadOnly}
                 />
                 <TextField
                   label="NI Number"
                   name="niNumber"
-                  defaultValue={decryptNullable(details.niNumber)}
+                  defaultValue={workspaceNiNumber}
                   disabled={isReadOnly}
                 />
                 <TextField
                   label="DOB"
                   name="dateOfBirth"
                   type="date"
-                  defaultValue={details.dateOfBirth}
+                  defaultValue={workspaceDateOfBirth}
                   disabled={isReadOnly}
                 />
 
                 <SelectField
                   label="Bookkeeping"
                   name="bookkeepingSoftware"
-                  defaultValue={profile.bookkeepingSoftware ?? ""}
+                  defaultValue={workspaceBookkeepingSoftware ?? ""}
                   disabled={isReadOnly}
                   options={[
                     ["", "Select"],
@@ -358,7 +481,7 @@ async function SelfAssessmentWorkspace({
                 <SelectField
                   label="MTD?"
                   name="isMtd"
-                  defaultValue={profile.isMtd ? "true" : "false"}
+                  defaultValue={workspaceIsMtd ? "true" : "false"}
                   disabled={isReadOnly}
                   options={[
                     ["false", "No"],
@@ -372,7 +495,16 @@ async function SelfAssessmentWorkspace({
               <h2 className="text-lg font-semibold text-gray-900">History</h2>
 
               <div className="mt-5 space-y-3">
-                {taxYears.map((taxYear) => (
+                {taxYears.filter((taxYear) => !taxYear.isCurrent)
+                  .length === 0 && (
+                  <p className="text-sm text-gray-500">
+                    No archived tax years yet.
+                  </p>
+                )}
+
+                {taxYears
+                  .filter((taxYear) => !taxYear.isCurrent)
+                  .map((taxYear) => (
                     <Link
                         key={taxYear.id}
                         href={`/clients/${clientId}/services/${clientServiceId}?taxYear=${encodeURIComponent(

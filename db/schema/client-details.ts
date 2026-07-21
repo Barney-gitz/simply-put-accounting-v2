@@ -7,6 +7,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+import { bookkeepingSoftwareEnum } from "./bookkeeping-software";
 import { clients } from "./clients";
 
 export const clientDetails = pgTable(
@@ -25,6 +26,8 @@ export const clientDetails = pgTable(
     dateOfBirth: date("date_of_birth"),
 
     companiesHouseAuthCode: text("companies_house_auth_code"),
+
+    bookkeepingSoftware: bookkeepingSoftwareEnum("bookkeeping_software"),
 
     createdAt: timestamp("created_at").defaultNow().notNull(),
 
