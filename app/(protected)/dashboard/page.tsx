@@ -577,44 +577,158 @@ function WorkloadOverview({
   dueWithinFourWeeks: number;
   waitingOnClient: number;
 }) {
+  /*
+   * dueWithinFourWeeks includes dueThisWeek, so subtract it
+   * to produce a separate 8–28 day segment.
+   */
+  const dueEightToTwentyEightDays = Math.max(
+    dueWithinFourWeeks - dueThisWeek,
+    0
+  );
+
+  const otherActiveWork = Math.max(
+    total -
+      overdue -
+      dueThisWeek -
+      dueEightToTwentyEightDays,
+    0
+  );
+
+  const safeTotal = Math.max(total, 1);
+
+  const overdueEnd =
+    (overdue / safeTotal) * 100;
+
+  const dueThisWeekEnd =
+    overdueEnd +
+    (dueThisWeek / safeTotal) * 100;
+
+  const dueWithinFourWeeksEnd =
+    dueThisWeekEnd +
+    (dueEightToTwentyEightDays / safeTotal) * 100;
+
+  const donutBackground =
+    total === 0
+      ? "conic-gradient(#e5e7eb 0% 100%)"
+      : `conic-gradient(
+          #ef4444 0% ${overdueEnd}%,
+          #f97316 ${overdueEnd}% ${dueThisWeekEnd}%,
+          #fbbf24 ${dueThisWeekEnd}% ${dueWithinFourWeeksEnd}%,
+          #6BC1B7 ${dueWithinFourWeeksEnd}% 100%
+        )`;
+
   return (
     <div className="mt-5">
-      <div className="flex items-center justify-center">
-        <div className="flex h-40 w-40 flex-col items-center justify-center rounded-full border-[18px] border-[#6BC1B7]/25">
-          <p className="text-3xl font-semibold text-gray-900">
-            {total}
-          </p>
+      <div className="flex justify-center">
+        <div
+          className="flex h-44 w-44 items-center justify-center rounded-full"
+          style={{
+            background: donutBackground,
+          }}
+        >
+          <div className="flex h-28 w-28 flex-col items-center justify-center rounded-full bg-white shadow-inner">
+            <p className="text-3xl font-semibold text-gray-900">
+              {total}
+            </p>
 
-          <p className="text-xs text-gray-500">
-            Active work
-          </p>
+            <p className="mt-1 text-xs text-gray-500">
+              Active work
+            </p>
+          </div>
         </div>
       </div>
 
       <div className="mt-6 space-y-3">
-        <LegendRow
+        <WorkloadLegendRow
           label="Overdue"
           value={overdue}
+          total={total}
           colour="bg-red-500"
         />
 
-        <LegendRow
+        <WorkloadLegendRow
           label="Due this week"
           value={dueThisWeek}
+          total={total}
           colour="bg-orange-500"
         />
 
-        <LegendRow
-          label="Due within 4 weeks"
-          value={dueWithinFourWeeks}
+        <WorkloadLegendRow
+          label="Due in 8–28 days"
+          value={dueEightToTwentyEightDays}
+          total={total}
           colour="bg-amber-400"
         />
 
-        <LegendRow
-          label="Waiting on client"
-          value={waitingOnClient}
-          colour="bg-sky-500"
+        <WorkloadLegendRow
+          label="Other active work"
+          value={otherActiveWork}
+          total={total}
+          colour="bg-[#6BC1B7]"
         />
+
+        <div className="border-t border-gray-100 pt-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-sky-500" />
+
+              <div>
+                <p className="text-sm text-gray-600">
+                  Waiting on client
+                </p>
+
+                <p className="text-xs text-gray-400">
+                  Included in the workload above
+                </p>
+              </div>
+            </div>
+
+            <p className="text-sm font-medium text-gray-900">
+              {waitingOnClient}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WorkloadLegendRow({
+  label,
+  value,
+  total,
+  colour,
+}: {
+  label: string;
+  value: number;
+  total: number;
+  colour: string;
+}) {
+  const percentage =
+    total === 0
+      ? 0
+      : Math.round((value / total) * 100);
+
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center gap-2">
+        <span
+          className={`h-2.5 w-2.5 rounded-full ${colour}`}
+        />
+
+        <p className="text-sm text-gray-600">
+          {label}
+        </p>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <p className="text-xs text-gray-400">
+          {percentage}%
+        </p>
+
+        <p className="w-5 text-right text-sm font-medium text-gray-900">
+          {value}
+        </p>
       </div>
     </div>
   );
@@ -625,11 +739,10 @@ function WorkByService({
 }: {
   items: DashboardServiceCount[];
 }) {
-  const maximum =
-    Math.max(
-      ...items.map((item) => item.count),
-      1
-    );
+  const maximum = Math.max(
+    ...items.map((item) => item.count),
+    1
+  );
 
   if (items.length === 0) {
     return (
@@ -646,11 +759,17 @@ function WorkByService({
         return (
           <div key={item.serviceCode}>
             <div className="flex items-center justify-between gap-4">
-              <p className="truncate text-sm text-gray-700">
-                {item.serviceName}
-              </p>
+              <div className="flex min-w-0 items-center gap-2">
+                <ServiceDot
+                  serviceCode={item.serviceCode}
+                />
 
-              <p className="text-sm font-medium text-gray-900">
+                <p className="truncate text-sm text-gray-700">
+                  {item.serviceName}
+                </p>
+              </div>
+
+              <p className="shrink-0 text-sm font-medium text-gray-900">
                 {item.count}
               </p>
             </div>
@@ -668,34 +787,6 @@ function WorkByService({
           </div>
         );
       })}
-    </div>
-  );
-}
-
-function LegendRow({
-  label,
-  value,
-  colour,
-}: {
-  label: string;
-  value: number;
-  colour: string;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <div className="flex items-center gap-2">
-        <span
-          className={`h-2.5 w-2.5 rounded-full ${colour}`}
-        />
-
-        <p className="text-sm text-gray-600">
-          {label}
-        </p>
-      </div>
-
-      <p className="text-sm font-medium text-gray-900">
-        {value}
-      </p>
     </div>
   );
 }
